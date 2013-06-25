@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Craigslist Multiride Search</title>
+<style type="text/css">
+body {
+margin: 0;
+}
+.header {
+background: #eee;
+border-bottom: 1px #555 solid;
+padding: 10px;
+}
+#loc-info {
+font-size: .6em;
+color: #333;
+}
+
+#results {
+line-height: 1.7em;
+}
+.ride {
+padding-left: 10px;
+padding-right: 10px;
+border-bottom: 1px solid #eee;
+}
+.days-0 {
+background: #cf9;
+}
+.days-1 {
+background: #ff9;
+}
+.days-2 {
+background:#ffc
+}
+.header a {
+color: #333;
+}
+
+#help {
+display: none;
+}
+#help-toggle {
+position:absolute;
+top:0;
+right: 0;
+}
+#help-toggle a {
+display: block;
+padding: 7px;
+text-decoration: none;
+color: #333;
+background: #ddd;
+border-bottom: 1px #333 solid;
+border-left: 1px #333 solid;
+}
+#help-toggle a:hover {
+background: #fff;
+}
+
+</style>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAMHyhMCWwlF0dkSp4jQDOy-kOOrcKoYkI&sensor=false"></script>
+<script type="text/javascript">
+var lat;
+var lon;
+
+
+function init() {
+  getLocation();
+}
+function getLocation() {
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(loadLocation);
+  }
+  else {
+    document.getElementById("loc-info").innerHTML = "No geolocation. Manually enter location.";
+  }
+}
+
+function loadLocation(position) {
+  document.getElementById('loading-loc').style.display = "inline";
+  lat = position.coords.latitude;
+  lon = position.coords.longitude;
+  document.getElementById("loc-info").innerHTML = "Location Taken From Position Given By Your Device (<a href='https://maps.google.com/maps?q=" + lat + ",+" + lon + "&z=8'>map</a>)";
+  googleReverse();
+}
+
+function googleReverse() {
+var city;
+var state;
+var geocoder = new google.maps.Geocoder();
+  var latlng = new google.maps.LatLng(lat,lon);
+  geocoder.geocode({'latLng': latlng}, function(results, status) {
+    if (status == google.maps.GeocoderStatus.OK) {
+      if (results[1]) {
+        var address_parts = results[1].address_components;
+		for (part in address_parts) {
+           var section = address_parts[part].types[0];
+		     if (section == "locality") {
+			   city = address_parts[part].short_name;
+			 }
+			 if (section == "administrative_area_level_1") {
+			   state = address_parts[part].short_name;
+			 }
+		}
+		if (city && state) {
+		document.getElementById("loc").value = city +", " + state;
+		} else {
+		document.getElementById("loc").value = results[1].formatted_address;
+		}
+		
+		getSites();
+      } else {
+        alert('No results found');
+      }
+    } else {
+      alert('Geocoder failed due to: ' + status);
+    }
+  });
+}
+
+function googleLookup() {
+var geocoder = new google.maps.Geocoder();
+
+  var address = document.getElementById('loc').value;
+  geocoder.geocode( { 'address': address}, function(results, status) {
+    if (status == google.maps.GeocoderStatus.OK) {
+       lat = results[0].geometry.location.lat();
+	   lon = results[0].geometry.location.lng();
+	   googleReverse();
+	   document.getElementById("loc-info").innerHTML = "Location Manually Entered By You (<a href='https://maps.google.com/maps?q=" + lat + ",+" + lon + "&z=8'>map</a>).";
+    } else {
+      alert('Geocode was not successful for the following reason: ' + status);
+    }
+  });
+}
+
+function refreshLocation() {
+ googleLookup();
+}
+
+function getSites() {
+  distance = document.getElementById("distance").value
+  var xmlHttp;
+  if (window.XMLHttpRequest) {
+    xmlHttp = new XMLHttpRequest();
+  }
+  xmlHttp.onreadystatechange=function() {
+    if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+      document.getElementById("sites").innerHTML = xmlHttp.responseText;
+	  	document.getElementById('loading-loc').style.display = "none";
+
+    }
+  }
+  xmlHttp.open("GET","sites.py?lat=" + lat + "&lon=" + lon + "&distance=" + distance,true);
+  xmlHttp.send();
+}
+
+function loadRides() {
+
+  if (document.getElementById("sites").innerHTML == "") {
+    getSites();
+  }
+  document.getElementById("results").innerHTML = ""
+  var siteInputs = {};
+  var siteInputs = document.getElementById("sites").getElementsByTagName("input");
+  for (var i = 0; i < siteInputs.length; i++) {
+
+    if (siteInputs[i].checked) {
+      getRides(siteInputs[i].value);
+	}
+	
+  }
+  
+  
+}
+
+function getRides(site) {
+  document.getElementById('loading-rides').style.display = "inline";
+  var xmlHttp;
+  if (window.XMLHttpRequest) {
+    xmlHttp = new XMLHttpRequest();
+  }
+  xmlHttp.onreadystatechange=function() {
+    if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+      document.getElementById("results").innerHTML = document.getElementById("results").innerHTML + xmlHttp.responseText;
+	  sortDivs();
+	  
+    }
+  }
+  var search = document.getElementById("search").value;
+  var days = document.getElementById("days-old").value;
+  xmlHttp.open("GET","search.py?site=" + site + "&search=" + search + "&days=" + days,true);
+  xmlHttp.send();
+}
+
+function sortDivs() {
+  var divs = document.getElementById('results').children;
+  var toSort = Array.prototype.slice.call(divs, 0);
+  
+  toSort.sort(function(a, b) {
+    var aord = +a.id.split('-')[1];
+    var bord = +b.id.split('-')[1];
+    return bord - aord;
+});
+  var parent = document.getElementById('results');
+parent.innerHTML = "";
+
+for(var i = 0, l = toSort.length; i < l; i++) {
+    parent.appendChild(toSort[i]);
+	}
+	document.getElementById('loading-rides').style.display = "none";
+
+}
+
+function toggleSites() {
+  var vis = document.getElementById('site-list').style.display;
+  var txt = document.getElementById('toggle').innerHTML;
+  if (vis == 'none') {
+    document.getElementById('site-list').style.display = 'block';
+	document.getElementById('toggle').innerHTML = "hide" + txt.substr(4);
+  } else {
+    document.getElementById('site-list').style.display = 'none';
+	document.getElementById('toggle').innerHTML = "show" + txt.substr(4);
+  }
+}
+
+function toggleHelp() {
+  var helpv = document.getElementById('help').style.display;
+  if (helpv == 'block') {
+	document.getElementById('help').style.display = 'none';
+	document.getElementById('help-a').innerHTML = 'show help';
+  } else {
+    document.getElementById('help').style.display = 'block';
+	document.getElementById('help-a').innerHTML = 'hide help';
+	}
+}
+</script>
+</head>
+<body onload="init()">
+<div class="header">
+<form action="javascript:refreshLocation()">
+<label for="loc">Location: </label><input id="loc" name="loc" type="text" size="40" />
+<input type="submit" value="Refresh Location" /><img src="loading.gif" id="loading-loc" style="display:none;"/><br />
+<div id="loc-info"></div>
+<label for="distance">Distance (mi): </label><input id="distance" size="3" name="distance" type="text" value="100" /></form>
+<span id="sites"></span><br />
+<form action="javascript:loadRides()">
+<label for="days-old">Days: </label><input id="days-old" name="days-old" type="text" value="7" size="2" />
+<label for="search">Search: </label><input id="search" name="search" type="text" />
+<input type="submit" value="Search" /><img src="loading.gif" id="loading-rides" style="display:none;"/> <a id="help-a" href="javascript:toggleHelp()">show help</a></form>
+<div id="help">
+<p>This page allows you to search for rideshares across multiple Craigslist sites at the same time. Enter a location, the number of miles around that location you'd like to search, how many days old the rides can be, and a search term. All the rides matching will be shown below ordered by date regardless of their location.</p>
+<p>This has been tested to work on chrome and android, it does not appear to work under IE.</p>
+<a href="javascript:toggleHelp()">hide</a>
+</div>
+</div>
+<div id="results">
+</div>
+</body>
+</html>
